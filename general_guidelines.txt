@@ -1,0 +1,137 @@
+General guidelines
+
+#------------------------------------------------------------
+Preparing muram snapshots (cube_small*.nc files) to the format needed for MPS-ATLAS
+#------------------------------------------------------------
+
+For RAVEN users:
+Simulation snapshots are cube_small*.nc files. They are netcdf files containing the following 3D arrays - density (rho), pressure (P), temperature (T), magnetic field x-component (Bx) y-component (By) z-component (Bz), velocity x-component (U) y-component (V) z-component (W), internal energy (E) or tau_500 (tau) depending on the version used. For MPS-ATLAS and MPS-STOKES-ATLAS we do not need E or tau.
+
+
+* copy the cube_small*.nc files for the case you want to run from helios /scratch/muram/sim_mh to /ptmp/user/cubes/muram
+
+e.g. if you want to run the K4 star for mtallicity=0.0 200G, then make a directory K4_mh00_200G in /ptmp/user/cubes/muram and copy the cube_small nc files to this directory you just created
+
+* create a directory where you want the atmospheres in MPS-ATLAS format for different viewing angles to be stored
+
+e.g. /ptmp/user/cubes/ready_cubes_K4_mh00_200G 
+
+* copy the file /ptmp/skrishna/cubes/step1 to your /ptmp/user/cubes/
+* copy the python script /ptmp/skrishna/cubes/selectcube_user.py to your /ptmp/user/cubes/
+* copy the folder /ptmp/skrishna/cubes/cut-cubes-user to your /ptmp/user/cubes/ (this is the folder containing input information for the cube rotation and cutting routines)
+* copy the source code for cube rotation and cutting /u/skrishna/rotate_cut_3Dcubes to your /u/user/
+
+
+compiling the source code:
+
+* if you want to run the routine for a flipped cube, or for specific velocity cases like horizontal only or vertical only, then you will have to make the desired changes in the file rotate_cut_3Dcubes/src/main.F90
+* in order to identify the different case, please specify an appropriate name to the executable .exe in the file rotate_cut_3Dcubes/src/Makefile
+* compile the code using the command ./compile in rotate_cut_3Dcubes
+* the executable (.exe file) with the name you specified in rotate_cut_3Dcubes/src/Makefile will now be placed in rotate_cut_3Dcubes/bin 
+* copy this executable from rotate_cut_3Dcubes/bin to /ptmp/user/cubes/cut-cubes-user
+
+
+Changes to be made in cut-cubes-user folder
+
+* in the file called ‘execut’ edit the path under the entry ‘folder’  to the name of the ready cubes directory you creates in your ptmp e.g.folder="/ptmp/user/cubes/ready_cubes_K4_mh00_200G/${name_dir}"-0"$nv"
+* in the file called ‘runnc’, change the name of the executable .exe file to the name you gave in the previous steps
+
+
+Submitting jobs to cluster
+In the python script selectcube_user.py
+-set directory=‘/ptmp/user/cubes/muram/‘
+-direct=‘name of the folder containing muram simulation nc files’ e.g direct=‘K4_mh00_200G’
+-please be aware of the if statement ‘if (i%3==0):’ i%3=0 is used to select every third nc file from the folder specified in direct=... . If you want to run the cube cutting on every single nc file in the folder then please change the if statement to ‘if (i%1==0):‘
+or simply remove the if statement
+
+The python script uses cut-cubes-user and the bash script step1. The bash script step1 is used to specify the computing requirement on the HPC cluster and send the job to the queue. In this script, please change the email id. If necessary, the wall time and job names.
+
+Finally to start the cube cutting jobs, run the python script selectcube_user.py
+
+Flipping the cubes (needed for horizontal drift correction)
+The idea is to perform rotation of the cubes in a direction opposite to what we normally do. Technically, this is equivalent to swapping the cube along x-axis and changing the sign of the vx velocities. Since the latter is easy to implement, we go for this approach. 
+
+For this a few changes need to be made in rotate_cut_3Dcubes/src/main.F90 
+
+* search for the line ‘Vtot(i,j,k) = mu*Vz(i,j,k) - smu*Vx(i,j,k)’ and change the sign of the second term in RHS
+
+!   setting for flipping the cube along x
+        Vtot(i,j,k) = mu*Vz(i,j,k) + smu*Vx(i,j,k)
+
+* search for ‘call swap_cube’ -  the subroutine swap_cube flips the cube upside down or left right depending on the axis specified. main.F90 already contains lines to flip the cube upside down on dimension index 3, which is z-axis. The index is 2 for x-axis and 1 for y-axis. We add a few lines here , as shown in the snippet below, to swap the cube along index 2, in addition to the already existing swapping on index 3. This is done for temperature, pressure, density, and Vtot arrays.
+
+!----- check the orientation of the  vertical dimension of the cube!
+   if (T(1,1,1) .gt. T(1,1,nz)) then
+     print*, ' cube is upside-down we flip it!'
+! cubes are point upwards! 
+     call swap_cube(T, nx, ny, nz, 3, temparr)
+     T = temparr
+     temparr = 0.0
+!    setting for flipping the cube along x
+!    dimension 1 is y, 2 is x and 3 is z
+     call swap_cube(T, nx, ny, nz, 2, temparr) !swap along x
+     T = temparr 
+     temparr = 0.0 
+     call swap_cube(P, nx, ny, nz, 3, temparr) ! swap along z
+     P = temparr
+     temparr = 0.0
+!    setting for flipping the cube along x
+     call swap_cube(P, nx, ny, nz, 2, temparr) !swap along x
+     P = temparr 
+     temparr = 0.0
+     call swap_cube(rho, nx, ny, nz, 3, temparr) ! swap along z
+     rho = temparr
+     temparr = 0.0     
+!    setting for flipping the cube along x
+     call swap_cube(rho, nx, ny, nz, 2, temparr) !swap along x
+     rho = temparr 
+     temparr = 0.0
+#ifdef VELO
+     call swap_cube(Vtot, nx, ny, nz, 3, temparr) ! swap along z
+     Vtot = temparr
+     temparr = 0.0
+!    setting for flipping the cube along x
+     call swap_cube(Vtot, nx, ny, nz, 2, temparr) !swap along x
+     Vtot = temparr 
+     temparr = 0.0
+#endif 
+   endif 
+
+* After making these changes in main.F90, save the changes and recompile the code. Please give a different name to the executable file which gets saved in rotate_cut_3Dcubes/bin before compiling
+* copy this executable from rotate_cut_3Dcubes/bin to /ptmp/user/cubes/cut-cubes-user
+* carry out the remaining steps, the same way as was done for the cubes before flipping
+
+
+
+#------------------------------------------------------------
+When computing the timeseries of spectra using MURaM snapshots at a specific cadence for 10 viewing angles and 10nm intervals: 
+#------------------------------------------------------------
+
+please ensure that all snapshots are present in all viewing angles and at all wavelengths. Sometimes the code doesn’t work the first time for some snapshots/viewing angles. Please re-run such cases and ensure that there are no missing snapshots. This is to avoid introducing artefacts by having different number of snapshots at different viewing angles and at different wavelengths. 
+
+Cleaning the folders after the spectral calculations are complete:
+Please use the sort_folders_standard bash script to clean all the run folders. This script creates av_files directory where spatially averaged spectra for every snapshot will be stored, full_nc_cubes directory where intensity at every pixel at every wavelength point is stored as nc files for each snapshot, and other_data directory where relevant executables and input information is stored.
+In this script, please edit the fields
+FOLDERS= - entry to specify the name of the folder you want to clean, and
+FILES= - to starting name of the folders containing data for each cube e.g K4_mh00_200G* for folders like K4_mh00_200G_123456, K4_mh00_200G_345678 etc
+SSD* on line 81 to starting name of the folders containing data for each cube e.g K4_mh00_200G* 
+
+Creating spaxels, cleaning and saving them:
+Use spaxels_create.py to create npy files containing spaxels array for each viewing angle. This script combines spaxels for the entire specified wavelength range (e.g. 380-800nm). Sometimes we get negative intensity values at random pixels and at random wavelengths because of communication issue during parallel computing. To get rid of such artefacts, use the routine spaxels_clean.py  and save the clean arrays in the npy format.
+
+Naming convention:
+files: intensity_wavelength-range-in-nm_6digit-ID-of-MURaM-snapshot _viewing-angle_number-of-pixels-in-x-used-to-create-spaxel_number-of-pixels-in-y-used-to-create-spaxel.npy 
+e.g intensity_380800nm_000721_0_16_16.npy
+
+place these npy files for 10 viewing angles in the folder as named below
+
+folder: smallcubes_muspectra_stellar-type_metallicity _logg_numberofbins_magnetisation_wavelength-range
+e.g. smallcubes_muspectra_K4_mh00_lg44_12bin_200G_380800
+
+Storing and archiving output spectra
+Let us store a copy of the spatially averaged spectra for each snapshot locally on helios at /scratch/muram/intensities/high_res_spectra
+Let us also store smallcubes_muspectra_K4_mh00_200G_380800 folders (containing spaxels array for a maximum of 5 randomly chosen snapshots) locally on helios at /scratch/muram/intensities/high_res_spectra
+I have added some scripts on helios which one can use to create temporally averaged spectra, combine spectra from different wavelength ranges and so on. Please feel free to use and change them according to your needs.
+
+Let us for the time being store all the intensity nc files for all cubes on raven archive at /r 
+
