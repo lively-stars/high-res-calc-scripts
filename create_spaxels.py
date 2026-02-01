@@ -36,7 +36,7 @@ class ReduceIntensityCubeSizes:
             averaged_int = spec.reshape(Nz, Nx // self.nx, self.nx, Ny // self.ny, self.ny).mean(axis=(2, 4))
         return averaged_int, wavevac
 
-base_path = "/path/to/directory/with/cube_folders"
+base_path = "/path/to/directory/containing/folders/with/names/*nm_vald*_mu10"
 wav_start = 380
 wav_end = 800
 wav_step =10
