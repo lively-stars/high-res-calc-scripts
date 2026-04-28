@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Bash script to organise spectral files and remove data that is no longer needed.
+#
+# Run the script after the spectral synthesis and averaging calculations.
+# Prior to usage, please change variable 'FILES' to match the cube names used for 
+# spectral synthesis.
+#
+# Example run:
+#
+#  $ ./sort_folders_standard directory_to_sort
+# 
+# or as:
+#
+#  $ bash sort_folders_standard directory_to_sort
+#
+# The 'directory_to_sort' can be an absolute or a relative path. If multiple 
+# directories are to be sorted, use the white flag.
+
+GREEN=`tput setaf 2`
+reset=`tput sgr0`
+
+FOLDERS=$1
+
+FILES=K0_mh00_*
+
+for k in $FOLDERS
+do 
+  echo "${GREEN}$k${reset}"
+  cd $k
+
+  stopcalc=0
+  for f in $FILES
+  do
+    echo "Counting fiels in $f..."
+    filename=$(basename -- "$f")
+    ##filename="${filename%.*}"
+    number="${filename##*_}"
+    # echo "  cube ID: $number"
+    cd $f
+    cd OUT_INTEN
+    for j in 0 1 2 3 4 5 6 7 8 9
+    # for j in 0
+    do
+      if [ -f "av_inten_mu_$j.dat" ]
+      then
+        echo "File av_inten_mu$j.dat in folder $f is there" >> "files_$f.dat"
+      else
+        echo "File av_inten_mu_$j.dat in folder $f is not found" >> "files_$f.dat"
+        stopcalc=1
+      fi
+    done
+    mv files*.dat ../../
+    cd ../../
+  done
+  cat files*.dat > availability.dat
+
+  rm files*.dat
+  if [ $stopcalc == 1 ]
+  then
+      echo "Some files are missing, going to abort"
+      exit 
+  fi
+
+  ###### now move nc cubes to full_nc_cubes folder
+  #
+  mkdir full_nc_cubes
+  for f in $FILES
+  do
+    echo "Moving .nc cubes for $f..."
+    cd $f
+    mv ./OUT_NC $f
+    mv $f ../full_nc_cubes
+    cd ../
+  done
+
+  ###### move the averages out
+  #
+  mkdir av_files
+  for f in $FILES
+  do
+    echo "Moving the average spectra for $f..."
+    cd $f
+    mv ./OUT_INTEN ../av_files/$f
+    mv ./collect/mpsa.wave ../av_files
+    cd ../
+  done
+
+  ###### delete everything that is not needed
+  #
+  mkdir other_data
+  for f in $FILES
+  do
+    echo "Deleting files from $f..."
+    cd $f
+    mv examplef/INPUT/flux.input ../other_data
+    cd ../
+    rm -rf $f
+  done
+
+  #
+  #save important information for later
+  mv executables ./other_data
+  mv cut_folder ./other_data
+  rm -r error
+  rm -r muram
+  rm -r ready_cubes*
+  rm -r rt_example
+  rm *.*
+
+  cd ../
+done
