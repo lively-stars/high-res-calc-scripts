@@ -58,7 +58,7 @@ For this a few changes need to be made in rotate_cut_3Dcubes/src/main.F90
 !   setting for flipping the cube along x
         Vtot(i,j,k) = mu*Vz(i,j,k) + smu*Vx(i,j,k)
 
-* search for ‘call swap_cube’ -  the subroutine swap_cube flips the cube upside down or left right depending on the axis specified. main.F90 already contains lines to flip the cube upside down on dimension index 3, which is z-axis. The index is 2 for x-axis and 1 for y-axis. We add a few lines here , as shown in the snippet below, to swap the cube along index 2, in addition to the already existing swapping on index 3. This is done for temperature, pressure, density, and Vtot arrays.
+* search for ‘call swap_cube’ -  the subroutine swap_cube flips the cube upside down or left right depending on the axis specified. main.F90 already contains lines to flip the cube upside down on dimension index 3, which is z-axis. The index is 2 for x-axis and 1 for y-axis. We add a few lines here , as shown in the snippet below, to swap the cube along index 2, in addition to the already existing swapping on index 3. This is done for temperature, pressure, density, and Vtot arrays. See below for the reasoning behind these changes.
 
 !----- check the orientation of the  vertical dimension of the cube!
    if (T(1,1,1) .gt. T(1,1,nz)) then
@@ -101,6 +101,9 @@ For this a few changes need to be made in rotate_cut_3Dcubes/src/main.F90
 * copy this executable from rotate_cut_3Dcubes/bin to /ptmp/user/cubes/cut-cubes-user
 * carry out the remaining steps, the same way as was done for the cubes before flipping
 
+* * why do we need this swap along x-axis and the sign change in Vx we did in Vtot? * *
+Now the swapping along x-axis (essentially a reflection of the cube in the x-direction) is needed to mimic the change of the viewing azimuth by 180 degrees.
+The change of the sign of Vx is needed to account for the way the co-ordinate system used defines the +x and -x axis directions. In the unswapped case, e.g if the Vx at a point is directed towards you, then the swapping will change this Vx to direct away from you. We need the sign change in Vx to ensure that the velocity is still pointing towards you, which is now 180 degree opposite from the unswapped case.
 
 
 #------------------------------------------------------------
